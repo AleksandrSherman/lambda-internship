@@ -1,0 +1,21 @@
+{
+  "name": "correctarium",
+  "version": "1.0.0",
+  "description": "",
+  "main": "correctarium.js",
+  "scripts": {
+    "start": "node correctarium.js",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+  },
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "dotenv": "^16.0.1",
+    "jest": "^28.1.3"
+  },
+  "dependencies": {
+    "axios": "^0.27.2",
+    "express": "^4.18.1"
+  }
+}
