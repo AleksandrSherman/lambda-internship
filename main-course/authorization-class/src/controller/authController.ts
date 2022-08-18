@@ -24,7 +24,7 @@ export class AuthController extends Controller {
     this.router.post("/refresh", this.refresh);
   }
 
-  public readonly signUp = async (req, res) => {
+  public signUp = async (req, res) => {
     const { email, password } = req.body;
 
     if (typeof email === "undefined") {
@@ -63,7 +63,7 @@ export class AuthController extends Controller {
     return res.status(200).json(tokens);
   };
 
-  public readonly login = async (req, res) => {
+  public login = async (req, res) => {
     const { email, password } = req.body;
 
     if (typeof email === "undefined") {

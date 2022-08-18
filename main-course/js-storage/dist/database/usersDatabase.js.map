@@ -1,0 +1,1 @@
+{"version":3,"file":"usersDatabase.js","sourceRoot":"","sources":["../../src/database/usersDatabase.ts"],"names":[],"mappings":"AAEA,MAAM,OAAO,aAAa;IAGtB,YAAoB,EAAM;QAAN,OAAE,GAAF,EAAE,CAAI;QACtB,IAAI,CAAC,UAAU,GAAG,EAAE,CAAC,UAAU,CAAC,YAAY,CAAC,CAAC;IAClD,CAAC;CACJ"}
