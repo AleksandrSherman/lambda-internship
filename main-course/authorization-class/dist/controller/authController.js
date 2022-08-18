@@ -1,5 +1,4 @@
 import { Controller } from "./base.js";
-import bcrypt from "bcrypt";
 const SECRET_KEY = process.env.SECRET_KEY;
 export class AuthController extends Controller {
     constructor(authService) {
@@ -22,15 +21,13 @@ export class AuthController extends Controller {
                     error: "'Email' and 'password' should be more than 4 symbols",
                 });
             }
-            const salt = bcrypt.genSaltSync(10);
-            const hash = bcrypt.hashSync(password, salt);
-            const userInformation = { email, password: hash };
             const user = await this.authService.getUserByEmail(email);
             if (typeof user !== "undefined") {
                 return res
                     .status(400)
                     .json({ error: "Current email is already registered" });
             }
+            const userInformation = { email, password };
             const createdUserId = await this.authService.createUser(userInformation);
             const tokens = this.authService.generateJwtTokens(createdUserId);
             return res.status(200).json(tokens);
@@ -53,7 +50,7 @@ export class AuthController extends Controller {
                     .status(400)
                     .json({ error: "This password or email is invalid" });
             }
-            const isValidPassword = bcrypt.compareSync(password, userInformation.password);
+            const isValidPassword = this.authService.checkPassword(password, userInformation.password);
             if (!isValidPassword) {
                 return res
                     .status(400)

@@ -1,12 +1,10 @@
 import { Controller } from "./base.js";
 import { AuthService } from "../service/authService.js";
-import bcrypt from "bcrypt";
-import mongodb from "mongodb";
 
 const SECRET_KEY = process.env.SECRET_KEY;
 
 export interface IApiUser {
-  _id?: mongodb.ObjectId;
+  _id?: string;
   email: string;
   password: string;
 }
@@ -43,11 +41,6 @@ export class AuthController extends Controller {
       });
     }
 
-    const salt = bcrypt.genSaltSync(10);
-    const hash = bcrypt.hashSync(password, salt);
-
-    const userInformation: IApiUser = { email, password: hash };
-
     const user = await this.authService.getUserByEmail(email);
 
     if (typeof user !== "undefined") {
@@ -55,6 +48,8 @@ export class AuthController extends Controller {
         .status(400)
         .json({ error: "Current email is already registered" });
     }
+
+    const userInformation: IApiUser = { email, password };
 
     const createdUserId = await this.authService.createUser(userInformation);
 
@@ -85,10 +80,7 @@ export class AuthController extends Controller {
         .json({ error: "This password or email is invalid" });
     }
 
-    const isValidPassword = bcrypt.compareSync(
-      password,
-      userInformation.password
-    );
+    const isValidPassword = this.authService.checkPassword(password, userInformation.password);
 
     if (!isValidPassword) {
       return res

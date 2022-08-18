@@ -17,7 +17,7 @@ class App {
     }
     initializeControllers() {
         this.controllers.forEach((controller) => {
-            this.app.use(controller.path, controller.router); // ???? Что такое use
+            this.app.use(controller.path, controller.router);
         });
     }
 }

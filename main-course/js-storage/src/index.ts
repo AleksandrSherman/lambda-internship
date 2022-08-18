@@ -5,7 +5,7 @@ import { UserService } from "./service/userService.js";
 import { UsersDatabase } from "./database/usersDatabase.js"
 
 async function main(): Promise<void> {
-    const client = await MongoClient.connect("https://localhost:27017");
+    const client = await MongoClient.connect("mongodb://localhost:27017");
 
     const db = client.db("js-storage");
 
