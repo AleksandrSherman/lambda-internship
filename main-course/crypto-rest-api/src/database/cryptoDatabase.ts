@@ -1,119 +1,214 @@
-import { CryptoCurrencyApi, CurrencyInfo } from "cryptoCurrencyApi";
-import { Connection, OkPacket, RowDataPacket } from "mysql2/promise";
+import { CryptoCurrencyApi, CurrencyInfo } from "Api/cryptoCurrencyApi.js";
+import {
+  AllLastCurrencies,
+  InfoByCurrencyNameAndInterval,
+  InfoByCurrencyNameAndSite,
+  InfoCurrenciesByName,
+} from "Interfaces/interfaces";
+import { OkPacket } from "mysql";
+import { Connection, RowDataPacket } from "mysql2/promise";
 import cron from "node-cron";
 
-export interface DbCurrency {
-  currencyName: string;
-  price: number;
-  site: string;
-}
-
-export interface DbSite{
-    currencyName: string;
-    price: number;
-}
-
 export class CryptoDatabase {
-  constructor( private db: Connection, private cryptoCurrencyApi: CryptoCurrencyApi ) { this.makeIntervalRequests(); }
+  constructor(
+    private db: Connection,
+    private cryptoCurrencyApi: CryptoCurrencyApi
+  ) {}
 
   public async initializeTables() {
     await this.db
-      .execute(`CREATE TABLE IF NOT EXISTS currencies (id INT PRIMARY KEY, 
+      .execute(`CREATE TABLE IF NOT EXISTS currencies (id INT PRIMARY KEY AUTO_INCREMENT, 
             currency_name VARCHAR(255),
-            price FLOAT(255, 10),
-            site VARCHAR(255)
+            price FLOAT(255, 3),
+            site VARCHAR(255),
+            date TIMESTAMP
             );`);
   }
 
-  public async putGeneralDataInDb(responses) {
-    let index = 1;
-    while (index <= responses.length) {
-      for await (const response of responses) {
-        await this.db
-          .execute(`INSERT INTO currencies (id, currency_name, price, site)
-        VALUES (${index},"${response.symbol}", "${response.priceUsd}", "${response.site}")
-        ON DUPLICATE KEY UPDATE currency_name = "${response.symbol}", price = "${response.priceUsd}", site = "${response.site}"`);
-        index++;
-      }
+  public async putGeneralDataInDb(responses: CurrencyInfo[]) {
+    const values: string[] = [];
+    const currentDate = new Date().toISOString().slice(0, 19).replace("T", " ");
+    for (const response of responses) {
+      values.push(
+        `("${response.symbol}", ${response.priceUsd}, "${response.site}", "${currentDate}")`
+      );
     }
-    await this.db.execute(`ALTER TABLE currencies AUTO_INCREMENT = ${index}`);
+
+    await this.db
+      .execute(`INSERT INTO currencies (currency_name, price, site, date)
+        VALUES ${values.join(",")};`);
   }
 
-  public async getInfoByCurrency(name: string) {
-    const [response] = await this.db.execute(
-      `SELECT currency_name, price, site FROM currencies WHERE currency_name = "${name}"`
+  public async getLastCurrenciesDate(): Promise<string> {
+    const [arrayOfLastDate] = await this.db.execute(
+      `SELECT date FROM currencies ORDER BY date DESC LIMIT 1;`
     );
 
-    const mappedToDbCurrency = this.mapToDbCurrency(response as RowDataPacket[][]  | RowDataPacket[] | OkPacket[])
+    const lastDate: string = arrayOfLastDate![0].date
+      .toISOString()
+      .slice(0, 19)
+      .replace("T", " ");
 
-    return mappedToDbCurrency;
+    return lastDate;
   }
 
-  public async getInfoBySite(siteName: string){
-    const [response] = await this.db.execute(`SELECT currency_name, price FROM currencies WHERE site = "${siteName}"`);
+  public async getAllLastDateCurrencies(
+    lastCurrenciesDate: string
+  ): Promise<AllLastCurrencies[]> {
+    const [allLastCurrencies] = await this.db.execute(
+      `SELECT currency_name, price FROM currencies WHERE date = CONVERT_TZ (?, "+00:00","+03:00");`,
+      [lastCurrenciesDate]
+    );
 
-    const mappedToDbCurrency = this.mapToDbSite(response as RowDataPacket[][]  | RowDataPacket[] | OkPacket[])
-
-    return mappedToDbCurrency;
-}
-
-  private async changeGeneralDataInDb(responses: CurrencyInfo[]) {
-    for await (const response of responses) {
-      const [rows] = await this.db.execute(
-        `SELECT * FROM currencies WHERE currency_name = "${response.symbol}"`
+    const mappedLastCurrencies: AllLastCurrencies[] =
+      this.mapToAllLastCurrencies(
+        allLastCurrencies as RowDataPacket[] | OkPacket[]
       );
 
-      if (!rows) {
-        await this.db
-          .execute(`INSERT INTO currencies (currency_name, price, site)
-        VALUES ("${response.symbol}", "${response.priceUsd}", "${response.site}")
-        ON DUPLICATE KEY UPDATE currency_name = "${response.symbol}", price = "${response.priceUsd}", site = "${response.site}"`);
-      } else {
-        await this.db.execute(
-          `UPDATE currencies SET price = ${response.priceUsd} WHERE currency_name = "${response.symbol}" AND site = "${response.site}"`
-        );
-      }
-    }
+    return mappedLastCurrencies;
   }
 
-  private async makeIntervalRequests() {
-    await this.cryptoCurrencyApi.getAllResponses();
-    const responses: CurrencyInfo[] = this.cryptoCurrencyApi.mapResponses();
+  public async getInfoByCurrencyName(
+    lastCurrenciesDate: string,
+    currencyName: string
+  ): Promise<InfoCurrenciesByName[]> {
+    const [currenciesByName] = await this.db.execute(
+      `SELECT currency_name, price FROM currencies WHERE date = CONVERT_TZ (?, "+00:00","+03:00") AND currency_name=?;`,
+      [lastCurrenciesDate, currencyName]
+    );
+    if (!Object.keys(currenciesByName).length) {
+      throw Error("Currency doesn't exist");
+    }
+    const mappedLastCurrencies: InfoCurrenciesByName[] =
+      this.mapToLastDateCurrencies(
+        currenciesByName as RowDataPacket[] | OkPacket[]
+      );
 
-    await this.initializeTables();
-    await this.putGeneralDataInDb(responses);
+    return mappedLastCurrencies;
+  }
 
-    cron.schedule("*/5 * * * * *", async () => {
-      await this.cryptoCurrencyApi.getAllResponses();
-      const responses: CurrencyInfo[] = this.cryptoCurrencyApi.mapResponses();
+  public async getInfoByCurrencyNameAndSite(
+    lastCurrenciesDate: string,
+    currencyName: string,
+    siteName: string
+  ): Promise<InfoByCurrencyNameAndSite[]> {
+    const [currenciesByNameAndSite] = await this.db.execute(
+      `SELECT currency_name, price, site FROM currencies 
+                WHERE date = CONVERT_TZ (?, "+00:00","+03:00") 
+                AND currency_name=?
+                AND site = ?;`,
+      [lastCurrenciesDate, currencyName, siteName]
+    );
+    if (!Object.keys(currenciesByNameAndSite).length) {
+      throw Error("Site or currency doesn't exist");
+    }
+    const mappedLastCurrencies: InfoByCurrencyNameAndSite[] =
+      this.mapToCurrencyNameAndSite(
+        currenciesByNameAndSite as RowDataPacket[] | OkPacket[]
+      );
+    return mappedLastCurrencies;
+  }
 
-      await this.changeGeneralDataInDb(responses);
+  public async getInfoByCurrencyNameAndInterval(
+    currencyName: string,
+    timeInterval: number
+  ): Promise<InfoByCurrencyNameAndInterval[]> {
+    const currentDate: Date = new Date();
+    const intervalDate = new Date(
+      currentDate.setMinutes(currentDate.getMinutes() - timeInterval)
+    );
 
+    const intervalDateToDbFormat = intervalDate
+      .toISOString()
+      .slice(0, 19)
+      .replace("T", " ");
+
+    const [currenciesByNameAndInterval] = await this.db.execute(
+      `SELECT currency_name, price, date FROM currencies 
+              WHERE date >= ?
+              AND currency_name=?;`,
+      [intervalDateToDbFormat, currencyName]
+    );
+
+    if (!Object.keys(currenciesByNameAndInterval).length) {
+      throw Error("Site or currency doesn't exist");
+    }
+
+    const mappedLastCurrencies: InfoByCurrencyNameAndInterval[] =
+      this.mapToCurrencyNameAndInterval(
+        currenciesByNameAndInterval as RowDataPacket[] | OkPacket[]
+      );
+
+    return mappedLastCurrencies;
+  }
+
+  public async makeIntervalRequests(): Promise<void> {
+    cron.schedule("*/5 * * * *", async () => {
+      await this.cryptoCurrencyApi.getResponses();
+      const responses: CurrencyInfo[] =
+        await this.cryptoCurrencyApi.mapResponses();
+
+      await this.putGeneralDataInDb(responses);
     });
   }
 
-  private mapToDbCurrency(response: RowDataPacket[][]  | RowDataPacket[] | OkPacket[]): DbCurrency[] {
-
-    const result: DbCurrency[]  = response.map((row) => {
-        const mappedResponse: DbCurrency = {
-            currencyName: row.currency_name,
-            price: row.price,
-            site: row.site
-        }
-        return mappedResponse;
-       });
-       return result;
-    }
-
-   private mapToDbSite(response: RowDataPacket[][]  | RowDataPacket[] | OkPacket[]): DbSite[] {
-
-        const result: DbSite[]  = response.map((row) => {
-            const mappedResponse: DbSite = {
-                currencyName: row.currency_name,
-                price: row.price,
-            }
-            return mappedResponse;
-           });
-           return result;
-        }
+  private mapToAllLastCurrencies(
+    allLastCurrencies: RowDataPacket[] | OkPacket[]
+  ): AllLastCurrencies[] {
+    const result: AllLastCurrencies[] = [];
+    allLastCurrencies.map((element) => {
+      const mappedObject: AllLastCurrencies = {
+        currencyName: element.currency_name,
+        price: element.price,
+      };
+      result.push(mappedObject);
+    });
+    return result;
   }
+
+  private mapToLastDateCurrencies(
+    currenciesByName: RowDataPacket[] | OkPacket[]
+  ): InfoCurrenciesByName[] {
+    const result: InfoCurrenciesByName[] = [];
+    currenciesByName.map((element) => {
+      const mappedObject: InfoCurrenciesByName = {
+        currencyName: element.currency_name,
+        price: element.price,
+      };
+      result.push(mappedObject);
+    });
+    return result;
+  }
+
+  private mapToCurrencyNameAndSite(
+    currenciesByNameAndSite: RowDataPacket[] | OkPacket[]
+  ): InfoByCurrencyNameAndSite[] {
+    const result: InfoByCurrencyNameAndSite[] = [];
+
+    currenciesByNameAndSite.map((element) => {
+      const mappedObject: InfoByCurrencyNameAndSite = {
+        currencyName: element.currency_name,
+        price: element.price,
+        site: element.site,
+      };
+      result.push(mappedObject);
+    });
+    return result;
+  }
+
+  private mapToCurrencyNameAndInterval(
+    currenciesByNameAndInterval: RowDataPacket[] | OkPacket[]
+  ): InfoByCurrencyNameAndInterval[] {
+    const result: InfoByCurrencyNameAndInterval[] = [];
+
+    currenciesByNameAndInterval.map((element) => {
+      const mappedObject: InfoByCurrencyNameAndInterval = {
+        currencyName: element.currency_name,
+        price: element.price,
+        date: element.date,
+      };
+      result.push(mappedObject);
+    });
+    return result;
+  }
+}

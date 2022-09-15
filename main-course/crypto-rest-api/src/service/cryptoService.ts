@@ -1,63 +1,156 @@
-import { CryptoDatabase, DbCurrency, DbSite } from "database/cryptoDatabase.js";
-
-export interface Currency {
-  currencyName: string;
-  price: number;
-  site: string;
-}
-
-export interface Site{
-    currencyName: string;
-    price: number;
-}
-
+import { CryptoDatabase } from "database/cryptoDatabase.js";
+import {
+  AllLastCurrencies,
+  AverageCurrency,
+  InfoByCurrencyNameAndInterval,
+  InfoCurrenciesByName,
+  PreAverageCurrency,
+} from "Interfaces/interfaces";
 
 export class CryptoService {
   constructor(private cryptoDatabase: CryptoDatabase) {}
 
-  public async getInfoByCurrency(name: string) {
-    const responseFromDb: DbCurrency[] = await this.cryptoDatabase.getInfoByCurrency(name);
+  public async getInfoAboutCurrency(
+    currencyName: string | undefined,
+    siteName: string | undefined,
+    timeInterval: number | undefined,
+    currensiesOutputLimit: number | undefined
+  ) {
+    const lastCurrenciesDate: string =
+      await this.cryptoDatabase.getLastCurrenciesDate();
 
-    if (!responseFromDb.length){
-        throw Error("Currency doesn't exist...");
+    if (
+      (currencyName && siteName && timeInterval) ||
+      (!currencyName && !siteName && timeInterval)
+    ) {
+      throw Error("Unsupported query param in this case");
     }
 
-      const mappedResponse: Currency[] = this.mapToCurrency(responseFromDb);
-      return mappedResponse;
+    if (!currencyName && !siteName && !timeInterval) {
+      const infoAllCurrencies =
+        await this.cryptoDatabase.getAllLastDateCurrencies(lastCurrenciesDate);
+      const infoAllCurrenciesWithAvgPrices = this.getAveragePrices(
+        infoAllCurrencies,
+        timeInterval
+      );
+
+      if (currensiesOutputLimit) {
+        const entries = Object.entries(infoAllCurrenciesWithAvgPrices);
+        const splittedEntries = entries.slice(0, currensiesOutputLimit);
+
+        const mappedToObject = Object.fromEntries(splittedEntries);
+
+        return mappedToObject;
+      }
+
+      return infoAllCurrenciesWithAvgPrices;
     }
+    if (currencyName && !siteName && !timeInterval) {
+      const infoByCurrencyName =
+        await this.cryptoDatabase.getInfoByCurrencyName(
+          lastCurrenciesDate,
+          currencyName
+        );
+      const infoByCurrencyNameWithAvgPrices = this.getAveragePrices(
+        infoByCurrencyName,
+        timeInterval
+      );
 
-    public async getInfoBySite(siteName: string){
-        const response = await this.cryptoDatabase.getInfoBySite(siteName);
+      if (currensiesOutputLimit) {
+        const entries = Object.entries(infoByCurrencyNameWithAvgPrices);
+        const splittedEntries = entries.slice(0, currensiesOutputLimit);
 
-        if (!response.length){
-            throw Error("Site doesn't exist...");
-        }
-    
-          const mappedResponse: Site[] = this.mapToSite(response);
-          return mappedResponse;
+        const mappedToObject = Object.fromEntries(splittedEntries);
+
+        return mappedToObject;
+      }
+
+      return infoByCurrencyNameWithAvgPrices;
     }
+    if (currencyName && siteName && !timeInterval) {
+      const infoByCurrencyNameAndSite =
+        await this.cryptoDatabase.getInfoByCurrencyNameAndSite(
+          lastCurrenciesDate,
+          currencyName,
+          siteName
+        );
 
-  private mapToCurrency(response: DbCurrency[]): Currency[] {
-    const mappedResponse = response.map((row)=>{
-        const mappedRow: Currency = {  currencyName: row.currencyName,
-            price: row.price,
-            site: row.site
-        }
-        return mappedRow;
-    })
+      return infoByCurrencyNameAndSite;
+    }
+    if (currencyName && !siteName && timeInterval) {
+      const infoByCurrencyNameAndInterval =
+        await this.cryptoDatabase.getInfoByCurrencyNameAndInterval(
+          currencyName,
+          timeInterval
+        );
+      const infoByCurrencyNameAndIntervalWithAvgPrices = this.getAveragePrices(
+        infoByCurrencyNameAndInterval,
+        timeInterval
+      );
 
-    return mappedResponse;
+      if (currensiesOutputLimit) {
+        const entries = Object.entries(
+          infoByCurrencyNameAndIntervalWithAvgPrices
+        );
+        const splittedEntries = entries.slice(0, currensiesOutputLimit);
+
+        const mappedToObject = Object.fromEntries(splittedEntries);
+
+        return mappedToObject;
+      }
+
+      return infoByCurrencyNameAndIntervalWithAvgPrices;
+    }
   }
 
-  private mapToSite(response: DbSite[]): Site[] {
-    const mappedResponse = response.map((row)=>{
-        const mappedRow: Site = {  
-            currencyName: row.currencyName,
-            price: row.price,
-        }
-        return mappedRow;
-    })
+  private getAveragePrices(
+    currencyArray:
+      | AllLastCurrencies[]
+      | InfoCurrenciesByName[]
+      | InfoByCurrencyNameAndInterval[],
+    timeInterval: number | undefined
+  ): AverageCurrency {
 
-    return mappedResponse;
+    const averageCurrencies: AverageCurrency = {};
+    const preAverageCurrency: PreAverageCurrency = {};
+
+    let pricesSum: number;
+    let averagePrice: number;
+
+    if(!timeInterval){
+      currencyArray.forEach((element) => {
+        if (preAverageCurrency[element.currencyName]) {
+          preAverageCurrency[element.currencyName] = [
+            ...(preAverageCurrency[element.currencyName]),
+            element.price,
+          ];
+        } else {
+          preAverageCurrency[element.currencyName] = [element.price];
+        }
+      });
+    }else{
+      (currencyArray as InfoByCurrencyNameAndInterval[]).forEach((element) => {
+        const date: number = element.date.getTime();
+
+        if (preAverageCurrency[date]) {
+          preAverageCurrency[date] = [
+            ...(preAverageCurrency[date]),
+            element.price,
+          ];
+        } else {
+          preAverageCurrency[date] = [element.price];
+        }
+      });
+    }
+
+    for (const key in preAverageCurrency) {
+      pricesSum = 0;
+      (preAverageCurrency[key]).forEach((price) => {
+        pricesSum += price;
+      });
+      averagePrice = pricesSum / (preAverageCurrency[key]).length;
+      averageCurrencies[key] = averagePrice;
+    }
+    return averageCurrencies;
   }
 }

@@ -1,12 +1,10 @@
-import "dotenv/config";
-
 import { App } from "./App.js";
 import mysql from "mysql2/promise";
 import { CryptoDatabase } from "./database/cryptoDatabase.js";
 import { CryptoService } from "./service/cryptoService.js";
 import { CryptoCurrencyController } from "./controller/cryptoCurrencyController.js";
-import { CryptoCurrencyApi } from "./cryptoCurrencyApi.js";
-import { CryptoSiteController } from "./controller/cryptoSiteController.js";
+import { CryptoCurrencyApi } from "./Api/cryptoCurrencyApi.js";
+
 
 async function main(): Promise<void> {
   const connection = await mysql.createConnection({
@@ -18,15 +16,19 @@ async function main(): Promise<void> {
   });
 
   const apiResponses = new CryptoCurrencyApi();
+  await apiResponses.getResponses();
+  const mappedResponses = await apiResponses.mapResponses();
 
   const cryptoDatabase = new CryptoDatabase(connection, apiResponses);
-
+  await cryptoDatabase.initializeTables();
+  await cryptoDatabase.putGeneralDataInDb(mappedResponses);
+  cryptoDatabase.makeIntervalRequests();
+  
   const cryptoService = new CryptoService(cryptoDatabase);
 
   const cryptoCurrenncyController = new CryptoCurrencyController(cryptoService);
-  const cryptoSiteController = new CryptoSiteController(cryptoService);
   
-  const app = new App([cryptoCurrenncyController, cryptoSiteController], 3000);
+  const app = new App([cryptoCurrenncyController], 3000);
 
   app.listen();
 }
