@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+      "esModuleInterop": true,
+      "allowSyntheticDefaultImports": true,
+      "module": "ES6", 
+      "target": "es2020",
+      "moduleResolution": "node", //
+      "sourceMap": true,
+      "strictNullChecks": true,
+      "outDir": "dist", //
+      "baseUrl": "src", //
+      "allowJs": true,
+      "strict": false,
+    },
+    "exclude": ["node_modules"], //
+    "include": ["src/**/*", "./image-upload-to-s3/**/*"], //
+  }

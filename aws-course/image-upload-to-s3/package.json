@@ -1,0 +1,22 @@
+{
+  "name": "image-upload-to-s3",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/functions/signUp.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.106",
+    "@types/node": "^18.7.18",
+    "aws-lambda": "^1.0.7"
+  },
+  "keywords": [],
+  "description": "",
+  "dependencies": {
+    "aws-sdk": "^2.1241.0"
+  }
+}

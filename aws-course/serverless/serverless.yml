@@ -1,0 +1,23 @@
+service: serverlessService
+
+# Cloud Provider	
+provider:
+  name: aws
+  stage: dev
+  region: us-east-2
+  runtime: nodejs16.x
+
+package:
+  patterns:
+    - "!src"
+    - "!tsconfig.json"
+    - "!.serverless"
+
+# Serverless Functions
+functions:
+  sayHello:
+    handler: "dist/sayHello.handler"
+    events:
+      - http:
+          path: "serverlessService/sayHello"
+          method: "get"
